@@ -52,7 +52,7 @@
             flex-direction: column;
             gap: 10px;
             width: 100%;
-            max-width: 400px; /* ここを400pxに修正 */
+            max-width: 400px;
             padding: 10px;
             border-radius: 0.5rem;
             background-color: #eee;
@@ -100,6 +100,24 @@
             font-size: 1.2rem;
             color: #555;
         }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .mute-button {
+            padding: 10px 12px;
+            font-size: 1.2rem;
+            background-color: #e0e0e0;
+            color: #555;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .mute-button:hover {
+            background-color: #ccc;
+        }
     </style>
 </head>
 <body class="bg-gray-100 flex flex-col justify-center items-center h-screen p-4">
@@ -126,8 +144,9 @@
                 <input type="range" id="dampingSlider" min="0.99" max="1.0" step="0.0001" value="0.999">
             </label>
         </div>
-        <div id="startButtonContainer" class="mt-4">
+        <div id="buttonGroup" class="mt-4 button-group">
             <button id="startButton" class="start-button">シミュレーションを開始</button>
+            <button id="muteButton" class="mute-button">🔊</button>
         </div>
         
     </div>
@@ -144,7 +163,8 @@
         const speedSlider = document.getElementById('speedSlider');
         const dampingSlider = document.getElementById('dampingSlider');
         const startButton = document.getElementById('startButton');
-        const startButtonContainer = document.getElementById('startButtonContainer');
+        const muteButton = document.getElementById('muteButton');
+        const buttonGroup = document.getElementById('buttonGroup');
         let simplePeriodValue = { textContent: "--.--" };
         let huygensPeriodValue = { textContent: "--.--" };
 
@@ -158,6 +178,7 @@
         let speedMultiplier = parseFloat(speedSlider.value);
         let dampingFactor = parseFloat(dampingSlider.value);
         const pixelsPerMeter = 100;
+        let isMuted = true;
         
         let simplePendulum = {
             theta: 0,
@@ -191,6 +212,9 @@
 
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         function playSound(frequency, type) {
+            if (isMuted) {
+                return;
+            }
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
 
@@ -532,7 +556,7 @@
             };
             
             isSimulationStarted = true;
-            startButtonContainer.classList.add('hidden');
+            startButton.style.display = 'none';
 
             isMeasuring = true;
             simulationStartTime = performance.now();
@@ -545,6 +569,12 @@
 
             lastTime = performance.now();
             animationFrameId = requestAnimationFrame(animate);
+        });
+
+        // Toggle mute function
+        muteButton.addEventListener('click', () => {
+            isMuted = !isMuted;
+            muteButton.textContent = isMuted ? '🔊' : '🔈'; // アイコンの切り替え
         });
 
         // ページが非表示になったらアニメーションを一時停止
@@ -566,6 +596,9 @@
             amplitudeSlider.min = -180;
             amplitudeSlider.max = 180;
             amplitudeSlider.value = 5;
+            
+            // 初期状態はミュート
+            muteButton.textContent = '🔊';
 
             // 初期ロード時に長さを計算
             handleSliderChange();
