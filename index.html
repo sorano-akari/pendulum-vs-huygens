@@ -114,9 +114,31 @@
             border: none;
             cursor: pointer;
             transition: background-color 0.2s;
+            -webkit-user-select: none; /* iOS Safari */
+            -ms-user-select: none; /* IE 10+ */
+            user-select: none; /* Standard syntax */
         }
         .mute-button:hover {
             background-color: #ccc;
+        }
+        .mute-button:active {
+            background-color: #aaa;
+        }
+        @media (max-width: 640px) {
+            .container {
+                gap: 10px;
+                padding: 10px;
+            }
+            .controls {
+                padding: 5px;
+            }
+            .controls label {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .controls input[type="range"] {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -283,9 +305,12 @@
         // --- Drawing function ---
         function draw() {
             ctx.clearRect(0, 0, width, height);
-
+            
+            // Canvasの高さに合わせて振り子の原点とグラフの位置を調整
+            const pendulumAreaHeight = height * 0.7; // 振り子の描画領域
+            const graphAreaHeight = height * 0.3; // グラフの描画領域
             const bobRadius = 15;
-            const originY = height * 0.2;
+            const originY = pendulumAreaHeight * 0.25;
 
             // --- Draw simple pendulum ---
             const simpleOriginX = width / 4;
@@ -384,8 +409,8 @@
 
 
             // --- タイミングチャート描画 ---
-            const graphYStart = height * 0.75;
-            const graphHeight = height * 0.2;
+            const graphYStart = pendulumAreaHeight;
+            const graphHeight = graphAreaHeight;
             const graphYCenter = graphYStart + graphHeight / 2;
             const graphXOffset = 20;
             const graphWidth = width - 2 * graphXOffset;
@@ -537,9 +562,9 @@
             const initialAmplitudeRad = (initialAmplitudeDeg / 180) * Math.PI;
 
             // 普通の振り子の振幅を-pi/2からpi/2に制限
-            const limitedSimpleAmplitudeRad = Math.min(Math.abs(initialAmplitudeRad), Math.PI / 2) * Math.sign(initialAmplitudeRad);
+            const limitedSimpleAmplitudeRad = Math.min(Math.abs(initialAmplitudeDeg), 90) * Math.sign(initialAmplitudeDeg);
             simplePendulum = {
-                theta: limitedSimpleAmplitudeRad,
+                theta: limitedSimpleAmplitudeRad * Math.PI / 180,
                 v: 0,
                 lastVSign: -1,
                 isFlashing: false,
