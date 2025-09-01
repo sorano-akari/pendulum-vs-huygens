@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>振り子のシミュレーション</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" xintegrity="sha384-nK8t4Bv3xY2B/p1+sJb0F4L4w1qE/q/3F5z5j9k0R7+5V+F6/D0" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" xintegrity="sha384-SjF0O+V8Q2I/d+mJ8X8y4X4b4g7P5u8r4+8V+4b8/q/Y+3" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" xintegrity="sha384-+FvJ95xQ2Ff22sW7W0o8+uJ752j9B7P5Q5h8/j+3/Y+3" crossorigin="anonymous"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            height: 100%;
+        }
+        h1 {
+            font-size: 1.5rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+        }
+        canvas {
+            border: 2px solid #333;
+            background-color: #fafafa;
+            border-radius: 0.5rem;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1 / 1;
+            display: block;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
+            max-width: 300px;
+            padding: 10px;
+            border-radius: 0.5rem;
+            background-color: #eee;
+        }
+        .controls label {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            color: #555;
+            gap: 4px;
+        }
+        .controls input[type="range"] {
+            width: 60%;
+        }
+        .start-button {
+            padding: 10px 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: white;
+            background-color: #4a90e2;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.2s;
+        }
+        .start-button:hover {
+            background-color: #357abd;
+        }
+        .period-display {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            width: 100%;
+            max-width: 300px;
+            text-align: center;
+            font-size: 1rem;
+            color: #333;
+        }
+        .period-label {
+            font-weight: bold;
+        }
+        .period-value {
+            font-size: 1.2rem;
+            color: #555;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex flex-col justify-center items-center h-screen p-4">
+
+    <div class="container flex flex-col items-center p-6 bg-white rounded-2xl shadow-lg">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">振り子のシミュレーション</h1>
+        <canvas id="pendulumCanvas"></canvas>
+
+        <div class="controls mt-4" id="controlsContainer">
+            <label>
+                振り子の長さ ($$L$$):
+                <input type="range" id="lengthSlider" min="50" max="250" value="150">
+            </label>
+            <label>
+                振幅 ($$\theta_{max}$$):
+                <input type="range" id="amplitudeSlider" min="-180" max="180" value="5">
+            </label>
+            <label>
+                速度スケール:
+                <input type="range" id="speedSlider" min="0.1" max="5.0" step="0.1" value="1.0">
+            </label>
+            <label>
+                減衰率:
+                <input type="range" id="dampingSlider" min="0.99" max="1.0" step="0.0001" value="0.999">
+            </label>
+        </div>
+        <div id="startButtonContainer" class="mt-4">
+            <button id="startButton" class="start-button">シミュレーションを開始</button>
+        </div>
+        
+    </div>
+    
+    <script>
+        // Get canvas and context
+        const canvas = document.getElementById('pendulumCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+
+        // Control sliders and buttons
+        const lengthSlider = document.getElementById('lengthSlider');
+        const amplitudeSlider = document.getElementById('amplitudeSlider');
+        const speedSlider = document.getElementById('speedSlider');
+        const dampingSlider = document.getElementById('dampingSlider');
+        const startButton = document.getElementById('startButton');
+        const startButtonContainer = document.getElementById('startButtonContainer');
+        let simplePeriodValue = { textContent: "--.--" };
+        let huygensPeriodValue = { textContent: "--.--" };
+
+
+        // Global variables
+        let pendulumLength = parseFloat(lengthSlider.value); // Controls Huygens pendulum length
+        let simplePendulumLength = 0; // Will be calculated based on amplitude
+        let amplitudeDeg = parseFloat(amplitudeSlider.value);
+        let amplitudeRad = (amplitudeDeg / 180) * Math.PI;
+        let g = 9.8 * 2; // 重力加速度を仮想的に2倍にする
+        let speedMultiplier = parseFloat(speedSlider.value);
+        let dampingFactor = parseFloat(dampingSlider.value);
+        const pixelsPerMeter = 100;
+        
+        let simplePendulum = {
+            theta: 0,
+            v: 0,
+            lastVSign: 1,
+            isFlashing: false,
+            flashTime: 0
+        };
+
+        let huygensPendulum = {
+            theta: 0,
+            v: 0,
+            lastVSign: 1,
+            isFlashing: false,
+            flashTime: 0
+        };
+
+        // Period and timing chart variables
+        let isMeasuring = false;
+        let isSimulationStarted = false;
+        let simpleStartTime = 0;
+        let huygensStartTime = 0;
+        let simpleSwingCount = 0;
+        let huygensSwingCount = 0;
+        let simpleTimingEvents = [];
+        let huygensTimingEvents = [];
+        let simulationStartTime = 0;
+        const graphDuration = 20000; // グラフの表示時間（ミリ秒）を20秒に増加
+        const FLASH_DURATION = 100; // ms
+
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(frequency, type) {
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.type = type;
+            oscillator.frequency.value = frequency;
+
+            gainNode.gain.setValueAtTime(1, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.1);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.1);
+        }
+
+        function resizeCanvas() {
+            width = canvas.offsetWidth;
+            height = canvas.offsetHeight;
+            canvas.width = width;
+            canvas.height = height;
+            draw();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function handleSliderChange() {
+            pendulumLength = parseFloat(lengthSlider.value);
+            amplitudeDeg = parseFloat(amplitudeSlider.value);
+            amplitudeRad = (amplitudeDeg / 180) * Math.PI;
+            speedMultiplier = parseFloat(speedSlider.value);
+            dampingFactor = parseFloat(dampingSlider.value);
+            
+            // 普通の振り子の長さを、ホイヘンスの振り子の周期と一致するように調整
+            // ホイヘンスの振り子の有効長は L/4
+            const huygensEffectiveLength = pendulumLength / 4;
+            // 普通の振り子の周期補正係数: T = T0 * (1 + (1/16)*theta^2)
+            // 周期を合わせるには、L_simple = L_huygens / (1 + (1/16)*theta^2)
+            const periodCorrectionFactor = 1 + (1 / 16) * amplitudeRad ** 2;
+            const targetSimpleLength = (4 * huygensEffectiveLength) / periodCorrectionFactor;
+            simplePendulumLength = targetSimpleLength;
+            
+            // Reset pendulum states
+            // ホイヘンスの振り子の初期振幅はスライダー値のまま
+            huygensPendulum = { theta: amplitudeRad, v: 0, lastVSign: -1, isFlashing: false, flashTime: 0 };
+            
+            // 普通の振り子の振幅を-pi/2からpi/2に制限
+            const limitedAmplitudeRad = Math.min(Math.abs(amplitudeRad), Math.PI / 2) * Math.sign(amplitudeRad);
+            simplePendulum = { theta: limitedAmplitudeRad, v: 0, lastVSign: -1, isFlashing: false, flashTime: 0 };
+            
+            // Reset period measurement display
+            simpleStartTime = 0;
+            huygensStartTime = 0;
+            simpleSwingCount = 0;
+            huygensSwingCount = 0;
+            simpleTimingEvents = [];
+            huygensTimingEvents = [];
+            simulationStartTime = performance.now();
+
+            draw();
+        }
+        lengthSlider.addEventListener('input', handleSliderChange);
+        amplitudeSlider.addEventListener('input', handleSliderChange);
+        speedSlider.addEventListener('input', handleSliderChange);
+        dampingSlider.addEventListener('input', handleSliderChange);
+        
+        // --- Drawing function ---
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+
+            const bobRadius = 15;
+            const originY = height * 0.2;
+
+            // --- Draw simple pendulum ---
+            const simpleOriginX = width / 4;
+            const simpleX = simpleOriginX + simplePendulumLength * Math.sin(simplePendulum.theta);
+            const simpleY = originY + simplePendulumLength * Math.cos(simplePendulum.theta);
+            ctx.beginPath();
+            ctx.moveTo(simpleOriginX, originY);
+            ctx.lineTo(simpleX, simpleY);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(simpleX, simpleY, bobRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#4a90e2';
+            ctx.fill();
+            ctx.strokeStyle = simplePendulum.isFlashing ? '#fff' : '#357abd';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(simpleOriginX, originY, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#333';
+            ctx.fill();
+
+            ctx.fillStyle = '#333';
+            ctx.font = '16px "Inter"';
+            ctx.textAlign = 'center';
+            ctx.fillText('普通の振り子', simpleOriginX, originY + simplePendulumLength + bobRadius + 30);
+            ctx.font = '12px "Inter"';
+            ctx.fillText(`長さ: ${simplePendulumLength.toFixed(2)} px`, simpleOriginX, originY + simplePendulumLength + bobRadius + 50);
+
+            // --- Draw Huygens pendulum ---
+            const huygensOriginX = width * 3 / 4;
+            const rHuygens = pendulumLength / 4;
+
+            ctx.beginPath();
+            for (let t = -Math.PI; t <= 0; t += 0.01) {
+                const x = huygensOriginX + rHuygens * (t - Math.sin(t));
+                const y = originY + rHuygens * (1 - Math.cos(t));
+                if (t === -Math.PI) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.beginPath();
+            for (let t = 0; t <= Math.PI; t += 0.01) {
+                const x = huygensOriginX + rHuygens * (t - Math.sin(t));
+                const y = originY + rHuygens * (1 - Math.cos(t));
+                if (t === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+
+            const huygensBobX = huygensOriginX + rHuygens * (huygensPendulum.theta + Math.sin(huygensPendulum.theta));
+            const huygensBobY = originY + 2 * rHuygens + rHuygens * (1 + Math.cos(huygensPendulum.theta));
+            const tangentPointX = huygensOriginX + rHuygens * (huygensPendulum.theta - Math.sin(huygensPendulum.theta));
+            const tangentPointY = originY + rHuygens * (1 - Math.cos(huygensPendulum.theta));
+            
+            ctx.beginPath();
+            ctx.moveTo(tangentPointX, tangentPointY);
+            ctx.lineTo(huygensBobX, huygensBobY);
+            ctx.strokeStyle = '#666';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(huygensBobX, huygensBobY, bobRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#e2904a';
+            ctx.fill();
+            ctx.strokeStyle = huygensPendulum.isFlashing ? '#fff' : '#bd7a35';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            ctx.fillStyle = '#333';
+            ctx.font = '16px "Inter"';
+            ctx.textAlign = 'center';
+            ctx.fillText('ホイヘンスの振り子', huygensOriginX, originY + pendulumLength + bobRadius + 30);
+            ctx.font = '12px "Inter"';
+            ctx.fillText(`長さ: ${pendulumLength.toFixed(2)} px`, huygensOriginX, originY + pendulumLength + bobRadius + 50);
+
+            // 周期の表示
+            ctx.font = '14px "Inter"';
+            ctx.fillStyle = '#333';
+            ctx.textAlign = 'center';
+            ctx.fillText(`周期: ${simplePeriodValue.textContent} ms`, simpleOriginX, originY + simplePendulumLength + bobRadius + 75);
+            ctx.fillText(`周期: ${huygensPeriodValue.textContent} ms`, huygensOriginX, originY + pendulumLength + bobRadius + 75);
+
+
+            // --- タイミングチャート描画 ---
+            const graphYStart = height * 0.75;
+            const graphHeight = height * 0.2;
+            const graphYCenter = graphYStart + graphHeight / 2;
+            const graphXOffset = 20;
+            const graphWidth = width - 2 * graphXOffset;
+            const currentTime = performance.now();
+            
+            // グラフの背景と枠線
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, graphYStart, width, graphHeight);
+            ctx.strokeStyle = '#999';
+            ctx.strokeRect(graphXOffset, graphYStart, graphWidth, graphHeight);
+
+            // グラフの基準線
+            ctx.beginPath();
+            ctx.moveTo(graphXOffset, graphYCenter);
+            ctx.lineTo(graphXOffset + graphWidth, graphYCenter);
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            ctx.font = '12px "Inter"';
+            ctx.fillStyle = '#333';
+            ctx.textAlign = 'center';
+            ctx.fillText('時刻', graphXOffset + graphWidth / 2, graphYStart + graphHeight + 15);
+            ctx.textAlign = 'left';
+            ctx.fillText('普通の振り子', graphXOffset + 5, graphYStart + 15);
+            ctx.fillText('ホイヘンスの振り子', graphXOffset + 5, graphYCenter + 15);
+
+            // スクロール計算
+            const pixelsPerMs = graphWidth / graphDuration;
+            const scrollOffset = (currentTime - simulationStartTime) * speedMultiplier;
+
+            // 普通の振り子の通過時刻をグラフに描画
+            ctx.strokeStyle = '#4a90e2';
+            ctx.lineWidth = 2;
+            simpleTimingEvents.forEach(time => {
+                const xPos = graphXOffset + graphWidth - (scrollOffset - (time - simulationStartTime) * speedMultiplier) * pixelsPerMs;
+                if (xPos > graphXOffset) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, graphYStart);
+                    ctx.lineTo(xPos, graphYCenter);
+                    ctx.stroke();
+                }
+            });
+
+            // ホイヘンスの振り子の通過時刻をグラフに描画
+            ctx.strokeStyle = '#e2904a';
+            ctx.lineWidth = 2;
+            huygensTimingEvents.forEach(time => {
+                const xPos = graphXOffset + graphWidth - (scrollOffset - (time - simulationStartTime) * speedMultiplier) * pixelsPerMs;
+                if (xPos > graphXOffset) {
+                    ctx.beginPath();
+                    ctx.moveTo(xPos, graphYCenter);
+                    ctx.lineTo(xPos, graphYStart + graphHeight);
+                    ctx.stroke();
+                }
+            });
+        }
+
+        // --- Animation loop ---
+        let lastTime = performance.now();
+        function animate(timestamp) {
+            const deltaTime = (timestamp - lastTime) / 1000;
+            
+            if (isSimulationStarted) {
+                // deltaTimeの最大値を制限し、不自然な動きを防ぐ
+                const clampedDeltaTime = Math.min(deltaTime, 0.05);
+                const dt = clampedDeltaTime * speedMultiplier;
+
+                // Simple pendulum equation of motion
+                const alphaSimple = -(g / (simplePendulumLength / pixelsPerMeter)) * Math.sin(simplePendulum.theta);
+                simplePendulum.v += alphaSimple * dt;
+                simplePendulum.v *= dampingFactor;
+                simplePendulum.theta += simplePendulum.v * dt;
+
+                // Huygens pendulum equation of motion (more accurate)
+                const rHuygens = pendulumLength / 4;
+                const alphaHuygens = -(g / (4 * rHuygens / pixelsPerMeter)) * huygensPendulum.theta;
+                huygensPendulum.v += alphaHuygens * dt;
+                huygensPendulum.v *= dampingFactor;
+                huygensPendulum.theta += huygensPendulum.v * dt;
+
+                // Period measurement logic
+                const currentTime = performance.now();
+                
+                // 振り子が平衡点を通過したかを判定（速度の符号が反転したとき）
+                if (Math.sign(simplePendulum.v) !== simplePendulum.lastVSign) {
+                    if (isMeasuring) {
+                        if (simpleSwingCount > 0) {
+                            // 測定した時間（半周期）を2倍して全周期として表示
+                            const period = (currentTime - simpleStartTime) * 2;
+                            simplePeriodValue.textContent = `${period.toFixed(2)}`;
+                        }
+                        simpleStartTime = currentTime;
+                        simpleTimingEvents.push(simpleStartTime);
+                        playSound(440, 'square');
+                        simpleSwingCount++;
+                        simplePendulum.isFlashing = true;
+                        simplePendulum.flashTime = currentTime;
+                    }
+                }
+                simplePendulum.lastVSign = Math.sign(simplePendulum.v);
+
+                if (Math.sign(huygensPendulum.v) !== huygensPendulum.lastVSign) {
+                    if (isMeasuring) {
+                        if (huygensSwingCount > 0) {
+                            // 測定した時間（半周期）を2倍して全周期として表示
+                            const period = (currentTime - huygensStartTime) * 2;
+                            huygensPeriodValue.textContent = `${period.toFixed(2)}`;
+                        }
+                        huygensStartTime = currentTime;
+                        huygensTimingEvents.push(huygensStartTime);
+                        playSound(880, 'sawtooth');
+                        huygensSwingCount++;
+                        huygensPendulum.isFlashing = true;
+                        huygensPendulum.flashTime = currentTime;
+                    }
+                }
+                huygensPendulum.lastVSign = Math.sign(huygensPendulum.v);
+
+                // Flash effect logic
+                if (simplePendulum.isFlashing && currentTime - simplePendulum.flashTime > FLASH_DURATION) {
+                    simplePendulum.isFlashing = false;
+                }
+                if (huygensPendulum.isFlashing && currentTime - huygensPendulum.flashTime > FLASH_DURATION) {
+                    huygensPendulum.isFlashing = false;
+                }
+            }
+            
+            lastTime = timestamp;
+            draw();
+            requestAnimationFrame(animate);
+        }
+        
+        // --- Event listeners for buttons ---
+        startButton.addEventListener('click', () => {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+
+            const initialAmplitudeDeg = parseFloat(amplitudeSlider.value);
+            const initialAmplitudeRad = (initialAmplitudeDeg / 180) * Math.PI;
+
+            // 普通の振り子の振幅を-pi/2からpi/2に制限
+            const limitedSimpleAmplitudeRad = Math.min(Math.abs(initialAmplitudeRad), Math.PI / 2) * Math.sign(initialAmplitudeRad);
+            simplePendulum = {
+                theta: limitedSimpleAmplitudeRad,
+                v: 0,
+                lastVSign: -1,
+                isFlashing: false,
+                flashTime: 0
+            };
+            
+            // ホイヘンスの振り子の初期振幅はスライダー値のまま
+            huygensPendulum = {
+                theta: initialAmplitudeRad,
+                v: 0,
+                lastVSign: -1,
+                isFlashing: false,
+                flashTime: 0
+            };
+            
+            isSimulationStarted = true;
+            startButtonContainer.classList.add('hidden');
+
+            isMeasuring = true;
+            simulationStartTime = performance.now();
+            
+            // シミュレーション開始時にタイミングチャートに記録
+            simpleTimingEvents.push(simulationStartTime);
+            huygensTimingEvents.push(simulationStartTime);
+            simpleStartTime = simulationStartTime;
+            huygensStartTime = simulationStartTime;
+
+            lastTime = performance.now();
+            animate(lastTime);
+        });
+
+        window.onload = function() {
+            // スライダーの最小値と最大値を-180と180に設定
+            amplitudeSlider.min = -180;
+            amplitudeSlider.max = 180;
+            amplitudeSlider.value = 5;
+
+            // 初期ロード時に長さを計算
+            handleSliderChange();
+            
+            draw();
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: "$$", right: "$$", display: true},
+                    {left: "$", right: "$", display: false}
+                ]
+            });
+        };
+    </script>
+</body>
+</html>
