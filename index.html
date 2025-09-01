@@ -52,7 +52,7 @@
             flex-direction: column;
             gap: 10px;
             width: 100%;
-            max-width: 300px;
+            max-width: 400px; /* ここを400pxに修正 */
             padding: 10px;
             border-radius: 0.5rem;
             background-color: #eee;
@@ -187,6 +187,7 @@
         let simulationStartTime = 0;
         const graphDuration = 20000; // グラフの表示時間（ミリ秒）を20秒に増加
         const FLASH_DURATION = 100; // ms
+        let animationFrameId = null;
 
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         function playSound(frequency, type) {
@@ -350,12 +351,12 @@
             ctx.font = '12px "Inter"';
             ctx.fillText(`長さ: ${pendulumLength.toFixed(2)} px`, huygensOriginX, originY + pendulumLength + bobRadius + 50);
 
-            // 周期の表示
+            // 周期の表示 (秒単位に変換)
             ctx.font = '14px "Inter"';
             ctx.fillStyle = '#333';
             ctx.textAlign = 'center';
-            ctx.fillText(`周期: ${simplePeriodValue.textContent} ms`, simpleOriginX, originY + simplePendulumLength + bobRadius + 75);
-            ctx.fillText(`周期: ${huygensPeriodValue.textContent} ms`, huygensOriginX, originY + pendulumLength + bobRadius + 75);
+            ctx.fillText(`周期: ${simplePeriodValue.textContent} s`, simpleOriginX, originY + simplePendulumLength + bobRadius + 75);
+            ctx.fillText(`周期: ${huygensPeriodValue.textContent} s`, huygensOriginX, originY + pendulumLength + bobRadius + 75);
 
 
             // --- タイミングチャート描画 ---
@@ -421,7 +422,15 @@
 
         // --- Animation loop ---
         let lastTime = performance.now();
+        let isPaused = false;
+
         function animate(timestamp) {
+            if (isPaused) {
+                lastTime = timestamp;
+                animationFrameId = requestAnimationFrame(animate);
+                return;
+            }
+
             const deltaTime = (timestamp - lastTime) / 1000;
             
             if (isSimulationStarted) {
@@ -449,8 +458,8 @@
                 if (Math.sign(simplePendulum.v) !== simplePendulum.lastVSign) {
                     if (isMeasuring) {
                         if (simpleSwingCount > 0) {
-                            // 測定した時間（半周期）を2倍して全周期として表示
-                            const period = (currentTime - simpleStartTime) * 2;
+                            // 測定した時間（半周期）を2倍して全周期として表示し、秒単位に変換
+                            const period = (currentTime - simpleStartTime) * 2 / 1000;
                             simplePeriodValue.textContent = `${period.toFixed(2)}`;
                         }
                         simpleStartTime = currentTime;
@@ -466,8 +475,8 @@
                 if (Math.sign(huygensPendulum.v) !== huygensPendulum.lastVSign) {
                     if (isMeasuring) {
                         if (huygensSwingCount > 0) {
-                            // 測定した時間（半周期）を2倍して全周期として表示
-                            const period = (currentTime - huygensStartTime) * 2;
+                            // 測定した時間（半周期）を2倍して全周期として表示し、秒単位に変換
+                            const period = (currentTime - huygensStartTime) * 2 / 1000;
                             huygensPeriodValue.textContent = `${period.toFixed(2)}`;
                         }
                         huygensStartTime = currentTime;
@@ -491,7 +500,7 @@
             
             lastTime = timestamp;
             draw();
-            requestAnimationFrame(animate);
+            animationFrameId = requestAnimationFrame(animate);
         }
         
         // --- Event listeners for buttons ---
@@ -535,7 +544,21 @@
             huygensStartTime = simulationStartTime;
 
             lastTime = performance.now();
-            animate(lastTime);
+            animationFrameId = requestAnimationFrame(animate);
+        });
+
+        // ページが非表示になったらアニメーションを一時停止
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                isPaused = true;
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                }
+            } else {
+                isPaused = false;
+                lastTime = performance.now();
+                animationFrameId = requestAnimationFrame(animate);
+            }
         });
 
         window.onload = function() {
